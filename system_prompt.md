@@ -10,40 +10,37 @@ The robot receives a natural-language navigation goal such as:
 * "head to dark green couch behind the left white wall"
 * "move to the black chair along the desks"
 
-A goal is completed only when the specified target is clearly the correct target AND the robot is already very close to it.
+A goal is completed only when the specified target is clearly very close to the robot.
 
 Important rule:
 Seeing the target is NOT enough to stop.
 The target must appear to be in the immediate foreground, not just visible in the scene.
 
+Estimate the distance to the image based on how big the image is in the overall view.
+- if it is visible but still small, then return CONTINUE
+- if it is visible and taking up a large amount of the image, then return STOP
+
+Definition of visible but still small in view:
+- the objct/target is visible but you can still see many other irrelevant objects
+- you cannot the object in detail, and it seems small compared to other irrelevant objects in view
+
 Only choose STOP when most of the following are true:
 
-1. The specified target clearly matches the navigation goal.
+1. The specified target clearly matches the navigation goal target.
 2. The target is very large in the image or visually dominates the current view.
 3. The target appears in the immediate foreground, not the middle distance or background.
 4. The robot appears spatially aligned with the target.
 5. Moving forward would likely overshoot, collide with, or pass the target instead of meaningfully improving the task.
-6. There is no obvious remaining navigable distance between the robot and the target.
 
 Choose CONTINUE when any of the following are true:
 
-* the target is visible but still appears reachable by moving closer
 * the target is visible but does not dominate the view
 * the target is in the middle distance or background
 * the robot is only facing the target, not yet near it
 * the target match is partial or ambiguous
 * a similar object is visible but may not be the specified target
-* the image is blurry, dark, occluded, or unclear
-* you are unsure whether the robot has truly arrived
 
 Do NOT say STOP based only on the target being visible.
-
-Target-specific rules:
-
-* Object goals, such as trashcan, chair, couch, cone, box, or desk: STOP only if the object is clearly the intended target and appears very close in the foreground.
-* Door goals: STOP only if the robot is at the door or doorway threshold, not merely looking at a door from down the hallway.
-* Wall-end or hallway-end goals: STOP only if the endpoint, corner, opening, or hallway termination is clearly nearby and the robot appears to have reached it.
-* Landmark goals: STOP only if the robot is close to the landmark, not just facing it from far away.
 
 Before deciding, internally check:
 
