@@ -35,7 +35,7 @@ MIN_PIXELS = 256 * 28 * 28
 MAX_PIXELS = 768 * 28 * 28
 MAX_NEW_TOKENS = 128
 RUN_IMAGES_ROOT = SCRIPT_DIR / "run_images"
-OFFLINE_RUN_DIR = RUN_IMAGES_ROOT / "run16"
+OFFLINE_RUN_DIR = RUN_IMAGES_ROOT / "run6"
 
 
 def load_prompt_file(filename: str) -> str:

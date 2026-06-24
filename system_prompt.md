@@ -29,7 +29,6 @@ Only choose STOP when most of the following are true:
 1. The specified target clearly matches the navigation goal target.
 2. The target is very large in the image or visually dominates the current view.
 3. The target appears in the immediate foreground, not the middle distance or background.
-4. The robot appears spatially aligned with the target.
 5. Moving forward would likely overshoot, collide with, or pass the target instead of meaningfully improving the task.
 
 Choose CONTINUE when any of the following are true:
