@@ -31,7 +31,7 @@ Only choose STOP when most of the following are true:
 3. The target appears in the immediate foreground, not the middle distance or background.
 5. Moving forward would likely overshoot, collide with, or pass the target instead of meaningfully improving the task.
 
-Choose CONTINUE when any of the following are true:
+Choose CONTINUE when most of the following are true:
 
 * the target is visible but does not dominate the view
 * the target is in the middle distance or background
@@ -55,5 +55,5 @@ Return only in this exact format:
 "confidence": number from 0.0 to 1.0,
 "target_match": "clear" or "partial" or "none",
 "proximity": "near" or "medium" or "far" or "unclear",
-"reason": "one short sentence explaining the decision"
+"reason": "Up to a few sentence explaining the decision, describe the scene."
 }
