@@ -2,7 +2,7 @@
 """Run semantic stop-judge inference with Qwen2.5-VL-3B-Instruct-AWQ."""
 
 import json
-import sys
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -50,6 +50,10 @@ def load_offline_image_paths(run_dir: Path) -> list[Path]:
     return sorted(run_dir.glob("cur_image_*.png"), key=lambda p: int(p.stem.split("_")[-1]))
 
 
+def history_indices(n: int) -> list[int]:
+    return [i for i in (n - 4, n - 2, n) if i >= 0]
+
+
 # def create_run_image_dir() -> Path:
 #     """Create run_images/run{N} for this session (run0, run1, ...)."""
 #     RUN_IMAGES_ROOT.mkdir(parents=True, exist_ok=True)
@@ -75,30 +79,34 @@ def load_offline_image_paths(run_dir: Path) -> list[Path]:
 # def build_messages(
 #     node: IsaacSimPublisher, system_text: str, user_text: str, run_dir: Path, image_index: int
 # ) -> list:
-#     current_image_PIL = node.get_latest_image_pil()
-#     save_current_image(current_image_PIL, run_dir, image_index)
-#     return [
-#         {"role": "system", "content": system_text},
-#         {
-#             "role": "user",
-#             "content": [
-#                 {"type": "image", "image": current_image_PIL},
-#                 {"type": "text", "text": user_text},
-#             ],
-#         },
-#     ]
+#     frame_buffer[image_index] = node.get_latest_image_pil().copy()
+#     save_current_image(frame_buffer[image_index], run_dir, image_index)
+#     indices = history_indices(image_index)
+#     images = [frame_buffer[i] for i in indices]
+#     return build_messages(images, indices, system_text, user_text)
 
 
-def build_messages_from_image(image: Image.Image, system_text: str, user_text: str) -> list:
+def frame_label(frame_index: int, frame_indices: list[int]) -> str:
+    if len(frame_indices) == 1:
+        return f"Current camera frame (step {frame_index}):"
+    if frame_index == frame_indices[-1]:
+        return f"Newest camera frame (step {frame_index}):"
+    if frame_index == frame_indices[0]:
+        return f"Oldest camera frame in history (step {frame_index}):"
+    return f"Earlier camera frame (step {frame_index}):"
+
+
+def build_messages(
+    images: list[Image.Image], frame_indices: list[int], system_text: str, user_text: str
+) -> list:
+    content = []
+    for frame_index, img in zip(frame_indices, images):
+        content.append({"type": "text", "text": frame_label(frame_index, frame_indices)})
+        content.append({"type": "image", "image": img})
+    content.append({"type": "text", "text": user_text})
     return [
         {"role": "system", "content": system_text},
-        {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": image},
-                {"type": "text", "text": user_text},
-            ],
-        },
+        {"role": "user", "content": content},
     ]
 
 
@@ -142,9 +150,26 @@ def generate_and_decode(model, processor, inputs, max_new_tokens: int) -> str:
     )[0]
 
 def parse_response(response: str) -> bool:
-    #decode the response to a json object and return True if the decision is STOP and False otherwise
-    json_response = json.loads(response)
-    return json_response["decision"] == "STOP" and json_response["confidence"] >= 0.95
+    cleaned = response.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    for candidate in (cleaned, response.strip()):
+        try:
+            parsed = json.loads(candidate)
+            break
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", candidate, re.DOTALL)
+            if match:
+                try:
+                    parsed = json.loads(match.group(0))
+                    break
+                except json.JSONDecodeError:
+                    pass
+    else:
+        print(f"Warning: could not parse response, defaulting to CONTINUE:\n{response}")
+        return False
+    return parsed.get("decision") == "STOP" and parsed.get("confidence", 0) >= 0.95
 
 def main() -> None:
     # rclpy.init()
@@ -160,24 +185,34 @@ def main() -> None:
     image_paths = load_offline_image_paths(OFFLINE_RUN_DIR)
     should_stop = False
 
-    for image_path in image_paths:
+    for n, image_path in enumerate(image_paths):
         if should_stop:
             break
-        print(f"Processing {image_path.name}")
-        with Image.open(image_path) as image:
-            messages = build_messages_from_image(image.copy(), system_text, user_text)
-            inputs = prepare_inputs(processor, messages, model.device)
-            response = generate_and_decode(model, processor, inputs, MAX_NEW_TOKENS)
+        indices = history_indices(n)
+        print(f"Processing {image_path.name} (history indices {indices})")
+        images = []
+        for i in indices:
+            with Image.open(image_paths[i]) as img:
+                images.append(img.copy())
+        messages = build_messages(images, indices, system_text, user_text)
+        inputs = prepare_inputs(processor, messages, model.device)
+        response = generate_and_decode(model, processor, inputs, MAX_NEW_TOKENS)
         print(response)
         should_stop = parse_response(response)
 
+    # frame_buffer: dict[int, Image.Image] = {}
+    # image_index = 0
     # while not should_stop:
-    #     messages = build_messages(node, system_text, user_text, run_dir, image_index)
-    #     image_index += 1
+    #     frame_buffer[image_index] = node.get_latest_image_pil().copy()
+    #     indices = history_indices(image_index)
+    #     images = [frame_buffer[i] for i in indices]
+    #     messages = build_messages(images, indices, system_text, user_text)
     #     inputs = prepare_inputs(processor, messages, model.device)
     #     response = generate_and_decode(model, processor, inputs, MAX_NEW_TOKENS)
+    #     print(f"history indices {indices}")
     #     print(response)
     #     should_stop = parse_response(response)
+    #     image_index += 1
     #     time.sleep(1)
     #
     # node.stop()

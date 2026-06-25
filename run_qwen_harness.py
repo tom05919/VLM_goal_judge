@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two-stage skeptical agent harness for Qwen2.5-VL semantic stop judging."""
+"""Two-agent harness: Agent 1 proposes STOP; Agent 2 filters premature stops."""
 
 import json
 import re
@@ -18,8 +18,9 @@ TASK_PROMPT = "move to the purple boxes"
 MIN_PIXELS = 256 * 28 * 28
 MAX_PIXELS = 768 * 28 * 28
 MAX_NEW_TOKENS = 128
+CONSECUTIVE_STOPS_REQUIRED = 2
 RUN_IMAGES_ROOT = SCRIPT_DIR / "run_images"
-OFFLINE_RUN_DIR = RUN_IMAGES_ROOT / "run6"
+OFFLINE_RUN_DIR = RUN_IMAGES_ROOT / "run16"
 
 
 def load_prompt_file(filename: str) -> str:
@@ -104,13 +105,18 @@ def parse_response(text: str) -> dict:
     }
 
 
+def is_stop(decision: dict) -> bool:
+    return decision.get("decision") == "STOP"
+
+
 def main() -> None:
-    system_text = load_prompt_file("system_prompt.md")
-    user_text = load_prompt_file("task_specific_prompt.md").format(task_prompt=TASK_PROMPT)
-    skeptic_system = load_prompt_file("harness_skeptic_system.md")
-    skeptic_user_template = load_prompt_file("harness_skeptic_user.md")
+    agent1_system = load_prompt_file("system_prompt.md")
+    agent1_user = load_prompt_file("task_specific_prompt.md").format(task_prompt=TASK_PROMPT)
+    agent2_system = load_prompt_file("harness_skeptic_system.md")
+    agent2_user_template = load_prompt_file("harness_skeptic_user.md")
 
     model, processor = load_model_and_processor(DEFAULT_MODEL)
+    consecutive_candidate_stops = 0
     should_stop = False
 
     for image_path in load_offline_image_paths(OFFLINE_RUN_DIR):
@@ -120,22 +126,39 @@ def main() -> None:
         with Image.open(image_path) as image:
             image = image.copy()
 
-            draft = generate(model, processor, build_messages(image, system_text, user_text))
-            print("--- Stage 1 (draft) ---")
-            print(draft)
+            agent1_raw = generate(model, processor, build_messages(image, agent1_system, agent1_user))
+            agent1 = parse_response(agent1_raw)
+            print("--- Agent 1 (stop proposer) ---")
+            print(agent1_raw)
 
-            skeptic_user = skeptic_user_template.format(
-                task_prompt=TASK_PROMPT, draft_response=draft.strip()
-            )
-            final = generate(model, processor, build_messages(image, skeptic_system, skeptic_user))
-            print("--- Stage 2 (skeptic) ---")
-            print(final)
+            if not is_stop(agent1):
+                consecutive_candidate_stops = 0
+                print("Final: CONTINUE (no stop proposed)")
+                continue
 
-            structured = parse_response(final)
-            should_stop = (
-                structured.get("decision") == "STOP" and structured.get("confidence", 0) >= 0.9
+            agent2_user = agent2_user_template.format(
+                task_prompt=TASK_PROMPT, first_agent_response=agent1_raw.strip()
             )
+            agent2_raw = generate(
+                model, processor, build_messages(image, agent2_system, agent2_user)
+            )
+            agent2 = parse_response(agent2_raw)
+            print("--- Agent 2 (early-stop filter) ---")
+            print(agent2_raw)
+
+            if not is_stop(agent2):
+                consecutive_candidate_stops = 0
+                print("Final: CONTINUE (stop clearly premature)")
+                continue
+
+            consecutive_candidate_stops += 1
+            print(
+                f"Candidate STOP ({consecutive_candidate_stops}/{CONSECUTIVE_STOPS_REQUIRED})"
+            )
+            if consecutive_candidate_stops >= CONSECUTIVE_STOPS_REQUIRED:
+                should_stop = True
+                print("Final: STOP")
 
 
 if __name__ == "__main__":
-    main() 
+    main()
