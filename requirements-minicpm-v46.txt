@@ -1,0 +1,19 @@
+# ONE-TIME bootstrap for minicpm-v46 conda env ONLY.
+# Do NOT install into qwen-vlm or any other env.
+#
+#   ./install_minicpm_env.sh
+#
+# Per https://huggingface.co/openbmb/MiniCPM-V-4.6-AWQ
+# Image-only: use av instead of torchcodec (CUDA compatibility).
+# AWQ loading needs gptqmodel; use TORCH_AWQ backend in run_minicpm_vl.py
+# to avoid CUDA JIT kernel compilation.
+
+transformers[torch]>=5.7.0
+torchvision
+av
+accelerate>=1.0.0
+gptqmodel>=7.1.0
+safetensors>=0.4.0
+pillow>=10.0
+huggingface_hub>=0.26.0
+numpy<2

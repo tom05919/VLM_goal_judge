@@ -85,23 +85,25 @@ def parse_response(text: str) -> dict:
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned).strip()
-    for candidate in (cleaned, text.strip()):
+    fixed = re.sub(r'"\s*\n\s*"decision"', '",\n"decision"', cleaned)
+    for candidate in (cleaned, fixed, text.strip()):
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:
             match = re.search(r"\{.*\}", candidate, re.DOTALL)
             if match:
+                snippet = re.sub(r'"\s*\n\s*"decision"', '",\n"decision"', match.group(0))
                 try:
-                    return json.loads(match.group(0))
+                    return json.loads(snippet)
                 except json.JSONDecodeError:
                     pass
     print(f"Warning: could not parse response, defaulting to CONTINUE:\n{text}")
     return {
+        "reason": "parse failure",
         "decision": "CONTINUE",
         "confidence": 0.0,
         "target_match": "unclear",
         "proximity": "unclear",
-        "reason": "parse failure",
     }
 
 

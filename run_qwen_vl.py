@@ -25,8 +25,7 @@ from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
 DEFAULT_MODEL = SCRIPT_DIR / "models/Qwen2.5-VL-3B-Instruct-AWQ"
-TASK_PROMPT = "move to the purple boxes"
-
+TASK_PROMPT = "move to the purple boxes and stop when the target is taking up most of the view"
 SYSTEM_PROMPT_FILE = "system_prompt.md"
 TASK_PROMPT_FILE = "task_specific_prompt.md"
 
@@ -34,20 +33,11 @@ TASK_PROMPT_FILE = "task_specific_prompt.md"
 MIN_PIXELS = 256 * 28 * 28
 MAX_PIXELS = 768 * 28 * 28
 MAX_NEW_TOKENS = 128
+IMMEDIATE_STOP_CONFIDENCE = 0.95
+CONSECUTIVE_STOP_CONFIDENCE = 0.9
+CONSECUTIVE_STOPS_REQUIRED = 4
 RUN_IMAGES_ROOT = SCRIPT_DIR / "run_images"
-OFFLINE_RUN_DIR = RUN_IMAGES_ROOT / "run6"
-
-
-def load_prompt_file(filename: str) -> str:
-    return (SCRIPT_DIR / filename).read_text(encoding="utf-8").strip()
-
-
-def build_user_prompt(task_prompt: str, task_template: str) -> str:
-    return task_template.format(task_prompt=task_prompt)
-
-
-def load_offline_image_paths(run_dir: Path) -> list[Path]:
-    return sorted(run_dir.glob("cur_image_*.png"), key=lambda p: int(p.stem.split("_")[-1]))
+OFFLINE_RUN_DIR = RUN_IMAGES_ROOT / "run7"
 
 
 def history_indices(n: int) -> list[int]:
@@ -149,41 +139,50 @@ def generate_and_decode(model, processor, inputs, max_new_tokens: int) -> str:
         trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0]
 
-def parse_response(response: str) -> bool:
+def parse_response(response: str) -> dict:
     cleaned = response.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned).strip()
-    for candidate in (cleaned, response.strip()):
+    fixed = re.sub(r'"\s*\n\s*"decision"', '",\n"decision"', cleaned)
+    for candidate in (cleaned, fixed, response.strip()):
         try:
-            parsed = json.loads(candidate)
-            break
+            return json.loads(candidate)
         except json.JSONDecodeError:
             match = re.search(r"\{.*\}", candidate, re.DOTALL)
             if match:
+                snippet = re.sub(r'"\s*\n\s*"decision"', '",\n"decision"', match.group(0))
                 try:
-                    parsed = json.loads(match.group(0))
-                    break
+                    return json.loads(snippet)
                 except json.JSONDecodeError:
                     pass
-    else:
-        print(f"Warning: could not parse response, defaulting to CONTINUE:\n{response}")
-        return False
-    return parsed.get("decision") == "STOP" and parsed.get("confidence", 0) >= 0.95
+    print(f"Warning: could not parse response, defaulting to CONTINUE:\n{response}")
+    return {
+        "reason": "parse failure",
+        "decision": "CONTINUE",
+        "confidence": 0.0,
+        "target_match": "unclear",
+        "proximity": "unclear",
+    }
+
 
 def main() -> None:
     # rclpy.init()
     # node = IsaacSimPublisher()
 
-    system_text = load_prompt_file(SYSTEM_PROMPT_FILE)
+    system_text = (SCRIPT_DIR / SYSTEM_PROMPT_FILE).read_text(encoding="utf-8").strip()
     print(system_text)
-    task_template = load_prompt_file(TASK_PROMPT_FILE)
-    user_text = build_user_prompt(TASK_PROMPT, task_template)
+    task_template = (SCRIPT_DIR / TASK_PROMPT_FILE).read_text(encoding="utf-8").strip()
+    user_text = task_template.format(task_prompt=TASK_PROMPT)
     print(user_text)
     model, processor = load_model_and_processor(DEFAULT_MODEL)
     # run_dir = create_run_image_dir()
-    image_paths = load_offline_image_paths(OFFLINE_RUN_DIR)
+    image_paths = sorted(
+        (p for p in OFFLINE_RUN_DIR.iterdir() if p.suffix.lower() in {".png", ".jpg", ".jpeg"}),
+        key=lambda p: int(re.search(r"\d+", p.name).group()),
+    )
     should_stop = False
+    consecutive_stop_votes = 0
 
     for n, image_path in enumerate(image_paths):
         if should_stop:
@@ -198,10 +197,27 @@ def main() -> None:
         inputs = prepare_inputs(processor, messages, model.device)
         response = generate_and_decode(model, processor, inputs, MAX_NEW_TOKENS)
         print(response)
-        should_stop = parse_response(response)
+        parsed = parse_response(response)
+        decision = parsed.get("decision")
+        confidence = parsed.get("confidence", 0)
+
+        if decision == "STOP" and confidence >= IMMEDIATE_STOP_CONFIDENCE:
+            should_stop = True
+            print(f"Final: STOP (confidence {confidence:.2f} >= {IMMEDIATE_STOP_CONFIDENCE})")
+        elif decision == "STOP" and confidence >= CONSECUTIVE_STOP_CONFIDENCE:
+            consecutive_stop_votes += 1
+            if consecutive_stop_votes >= CONSECUTIVE_STOPS_REQUIRED:
+                should_stop = True
+                print(f"Final: STOP ({CONSECUTIVE_STOPS_REQUIRED} consecutive votes)")
+            else:
+                print(f"STOP vote {consecutive_stop_votes}/{CONSECUTIVE_STOPS_REQUIRED}")
+        else:
+            consecutive_stop_votes = 0
+            print("Final: CONTINUE")
 
     # frame_buffer: dict[int, Image.Image] = {}
     # image_index = 0
+    # consecutive_stop_votes = 0
     # while not should_stop:
     #     frame_buffer[image_index] = node.get_latest_image_pil().copy()
     #     indices = history_indices(image_index)
@@ -211,7 +227,16 @@ def main() -> None:
     #     response = generate_and_decode(model, processor, inputs, MAX_NEW_TOKENS)
     #     print(f"history indices {indices}")
     #     print(response)
-    #     should_stop = parse_response(response)
+    #     parsed = parse_response(response)
+    #     decision, confidence = parsed.get("decision"), parsed.get("confidence", 0)
+    #     if decision == "STOP" and confidence >= IMMEDIATE_STOP_CONFIDENCE:
+    #         should_stop = True
+    #     elif decision == "STOP" and confidence >= CONSECUTIVE_STOP_CONFIDENCE:
+    #         consecutive_stop_votes += 1
+    #         if consecutive_stop_votes >= CONSECUTIVE_STOPS_REQUIRED:
+    #             should_stop = True
+    #     else:
+    #         consecutive_stop_votes = 0
     #     image_index += 1
     #     time.sleep(1)
     #

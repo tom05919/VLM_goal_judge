@@ -1,3 +1,4 @@
 run_images/
 __pycache__/
 models/Qwen2.5-VL-3B-Instruct-AWQ/
+models/MiniCPM-V-4.6-AWQ/
