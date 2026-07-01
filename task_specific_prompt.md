@@ -8,4 +8,4 @@ Judge whether the newest frame shows that the robot has reached the final stoppi
 
 Return STOP if the newest frame has the target object AND it is taking up a majority of the view.
 
-Return the required format and nothing else.
+Return the required JSON format and nothing else.

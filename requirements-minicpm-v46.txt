@@ -3,16 +3,15 @@
 #
 #   ./install_minicpm_env.sh
 #
-# Per https://huggingface.co/openbmb/MiniCPM-V-4.6-AWQ
+# Per https://huggingface.co/openbmb/MiniCPM-V-4.6
 # Image-only: use av instead of torchcodec (CUDA compatibility).
-# AWQ loading needs gptqmodel; use TORCH_AWQ backend in run_minicpm_vl.py
-# to avoid CUDA JIT kernel compilation.
+# 8-bit inference uses bitsandbytes load_in_8bit on the BF16 checkpoint.
 
 transformers[torch]>=5.7.0
 torchvision
 av
 accelerate>=1.0.0
-gptqmodel>=7.1.0
+bitsandbytes>=0.45.0
 safetensors>=0.4.0
 pillow>=10.0
 huggingface_hub>=0.26.0

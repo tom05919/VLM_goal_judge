@@ -12,6 +12,8 @@ The robot receives a natural-language navigation goal such as:
 
 You will get the same command, along with a history of images, use the task command for the robot and the history of images to make a judgement. 
 
+If you are only given one or two images. There is a very HIGH likelyhood that the next step is continue. 
+
 Use this test:
 
 Return STOP only when moving forward would likely overshoot, collide with, pass, or no longer improve reaching the target.
@@ -25,12 +27,26 @@ Choose STOP only when ALL of these are true:
 
 Do not estimate if the robot is still moving, that is not your job.
 
-Your job is to simply judge if the robot needs to stop based on the task description. 
+A STOP decision is clearly premature when:
 
-Return only in this exact format:
+* the target is visible but clearly still far away
+* the robot could obviously move closer to the target
+* there is obvious floor, hallway, open path, or empty space between the robot and target
+* the target is in the middle distance or background
+* the robot is merely facing the target
+* the target match is partial or ambiguous
+
+A STOP decision is reasonable when:
+
+* the specified target clearly matches the navigation goal
+* the robot appears immediately next to, directly in front of, or already at the target
+* moving forward would likely overshoot, collide with, pass, or no longer improve the task
+* there is no clear evidence that the robot is still far from the target
+
+Return only in this exact JSON format:
 
 {
-"reason": "one short sentence explaining the decision",
+"reason": "one short and concise sentence explaining the decision",
 "decision": "STOP" or "CONTINUE",
 "confidence": number from 0.0 to 1.0,
 "target_match": "clear" or "partial" or "none",

@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Run semantic stop-judge inference with MiniCPM-V-4.6-AWQ."""
+"""Run semantic stop-judge inference with MiniCPM-V-4.6 (8-bit)."""
 
 import json
 import re
 from pathlib import Path
 
 from PIL import Image
-from transformers import AutoModelForImageTextToText, AutoProcessor
-from transformers.utils.quantization_config import AwqConfig, AwqBackend
+from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-DEFAULT_MODEL = SCRIPT_DIR / "models/MiniCPM-V-4.6-AWQ"
+DEFAULT_MODEL = SCRIPT_DIR / "models/MiniCPM-V-4.6"
 TASK_PROMPT = "move to the door"
 
 SYSTEM_PROMPT_FILE = "system_prompt.md"
@@ -28,7 +27,7 @@ OFFLINE_RUN_DIR = RUN_IMAGES_ROOT / "run3_no-stop"
 
 
 def history_indices(n: int) -> list[int]:
-    return [i for i in (n - 4, n - 2, n) if i >= 0]
+    return [i for i in (n - 4, n - 2, 0) if i >= 0]
 
 
 def frame_label(frame_index: int, frame_indices: list[int]) -> str:
@@ -57,27 +56,17 @@ def build_messages(
 
 def load_model_and_processor(model_path: Path):
     print(f"Loading model from {model_path}")
-    awq_config = AwqConfig(
-        bits=4,
-        group_size=128,
-        zero_point=True,
-        backend=AwqBackend.TORCH_AWQ,
-        modules_to_not_convert=[
-            "in_proj_b",
-            "in_proj_a",
-            "model.vision_tower",
-            "model.merger",
-            "lm_head",
-        ],
-    )
+    bnb_config = BitsAndBytesConfig(load_in_8bit=True)
     processor = AutoProcessor.from_pretrained(str(model_path))
+    if processor.tokenizer.pad_token_id is None:
+        processor.tokenizer.pad_token_id = processor.tokenizer.eos_token_id
     model = AutoModelForImageTextToText.from_pretrained(
         str(model_path),
-        quantization_config=awq_config,
-        torch_dtype="auto",
+        quantization_config=bnb_config,
         device_map="auto",
         low_cpu_mem_usage=True,
     )
+    model.generation_config.pad_token_id = processor.tokenizer.pad_token_id
     return model, processor
 
 
@@ -88,8 +77,10 @@ def prepare_inputs(processor, messages: list, device, downsample_mode: str):
         add_generation_prompt=True,
         return_dict=True,
         return_tensors="pt",
-        downsample_mode=downsample_mode,
-        max_slice_nums=MAX_SLICE_NUMS,
+        processor_kwargs={
+            "downsample_mode": downsample_mode,
+            "max_slice_nums": MAX_SLICE_NUMS,
+        },
     ).to(device)
 
 
@@ -140,7 +131,7 @@ def main() -> None:
     system_text = (SCRIPT_DIR / SYSTEM_PROMPT_FILE).read_text(encoding="utf-8").strip()
     print(system_text)
     task_template = (SCRIPT_DIR / TASK_PROMPT_FILE).read_text(encoding="utf-8").strip()
-    user_text = task_template.format(task_prompt=TASK_PROMPT)
+    user_text = task_template.replace("{task_prompt}", TASK_PROMPT)
     print(user_text)
     model, processor = load_model_and_processor(DEFAULT_MODEL)
     image_paths = sorted(
@@ -169,7 +160,7 @@ def main() -> None:
         decision = parsed.get("decision")
         confidence = parsed.get("confidence", 0)
 
-        if decision == "STOP" and 1 >= confidence >= IMMEDIATE_STOP_CONFIDENCE:
+        if decision == "STOP" and confidence >= IMMEDIATE_STOP_CONFIDENCE:
             should_stop = True
             print(f"Final: STOP (confidence {confidence:.2f} >= {IMMEDIATE_STOP_CONFIDENCE})")
         elif decision == "STOP" and confidence >= CONSECUTIVE_STOP_CONFIDENCE:
