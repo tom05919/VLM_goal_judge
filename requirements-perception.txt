@@ -1,0 +1,24 @@
+# Shared deps for perception conda env (UniDepthV2 + Grounded-SAM-2).
+# Install via install_perception_env.sh — do NOT pip into qwen-vlm or minicpm-v46.
+#
+# Live stop judge (--live) also needs ROS 2 Python packages in this env.
+# Install ROS *after* pip deps, then re-pin numpy/scipy (mamba can downgrade numpy):
+#   mamba install -c robostack-staging -c conda-forge \
+#     ros-humble-rclpy ros-humble-sensor-msgs ros-humble-geometry-msgs
+#   mamba install -c conda-forge numpy==2.2.6 scipy==1.15.2 -y
+# If scipy import fails after ROS install, run: bash fix_perception_numpy.sh
+
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0
+transformers>=4.51.0
+numpy==2.2.6
+scipy==1.15.2
+pyparsing
+python-dateutil
+opencv-python
+supervision
+pycocotools
+huggingface_hub>=0.26.0
+pillow>=10.0
+xformers>=0.0.26

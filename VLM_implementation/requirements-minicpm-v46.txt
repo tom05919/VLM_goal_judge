@@ -1,0 +1,18 @@
+# ONE-TIME bootstrap for minicpm-v46 conda env ONLY.
+# Do NOT install into qwen-vlm or any other env.
+#
+#   ./install_minicpm_env.sh
+#
+# Per https://huggingface.co/openbmb/MiniCPM-V-4.6
+# Image-only: use av instead of torchcodec (CUDA compatibility).
+# 8-bit inference uses bitsandbytes load_in_8bit on the BF16 checkpoint.
+
+transformers[torch]>=5.7.0
+torchvision
+av
+accelerate>=1.0.0
+bitsandbytes>=0.45.0
+safetensors>=0.4.0
+pillow>=10.0
+huggingface_hub>=0.26.0
+numpy<2

@@ -1,0 +1,15 @@
+/root/miniforge3/envs/perception/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/workspace/workspace/goal_stop_judge/depth_implementation/UniDepth/unidepth/utils/chamfer_distance.py:9: UserWarning: !! To run evaluation you need KNN. Please compile KNN: `cd unidepth/ops/knn with && bash compile.sh`.
+  warnings.warn(
+/workspace/workspace/goal_stop_judge/depth_implementation/UniDepth/unidepth/layers/nystrom_attention.py:9: FutureWarning: xformers.components is deprecated and is not maintained anymore. It might be removed in a future version of xFormers 
+  from xformers.components.attention import NystromAttention
+/workspace/workspace/goal_stop_judge/depth_implementation/UniDepth/unidepth/models/unidepthv2/unidepthv2.py:262: UserWarning: !! self.resolution_level not set, using default bounds !!
+  warnings.warn("!! self.resolution_level not set, using default bounds !!")
+Cannot import NystromAttention, you can not run original UniDepth. UniDepthV2 is available.
+Loading lpiccinelli/unidepth-v2-vits14 on cuda...
+Not loading pretrained weights for backbone
+EdgeGuidedLocalSSI reverts to a non cuda-optimized operation, you will experince large slowdown, please install it:  `cd ./unidepth/ops/extract_patches && bash compile.sh`
+depth shape: (1, 1, 1280, 2720) dtype: torch.float32
+depth range (m): min=2.437 max=9.070 mean=3.023
+Saved raw depth tensor: /workspace/workspace/goal_stop_judge/depth_implementation/outputs/1_ex_omnivla_edge_depth_meters.pt
