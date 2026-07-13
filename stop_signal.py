@@ -4,7 +4,7 @@ from pathlib import Path
 
 DEFAULT_STOP_SIGNAL_PATH = Path(__file__).resolve().parent / ".navigation_stop"
 DEFAULT_TARGET_DISTANCE_PATH = DEFAULT_STOP_SIGNAL_PATH.parent / ".target_distance"
-DEFAULT_STOP_DISTANCE_M = 0.8
+DEFAULT_STOP_DISTANCE_M = 1.3
 DEFAULT_MIN_INTERVAL_S = 1.0
 
 
@@ -31,9 +31,29 @@ def read_target_distance(path: Path | None = None) -> float | None:
         return None
 
 
-def trigger_stop(distance_m: float, path: Path | None = None) -> None:
+def trigger_stop(
+    distance_m: float,
+    path: Path | None = None,
+    center_offset: float | None = None,
+) -> None:
     signal_path = path or DEFAULT_STOP_SIGNAL_PATH
-    signal_path.write_text(f"STOP\n{distance_m}\n", encoding="utf-8")
+    payload = f"STOP\n{distance_m}\n"
+    if center_offset is not None:
+        payload += f"{center_offset}\n"
+    signal_path.write_text(payload, encoding="utf-8")
+
+
+def read_center_offset(path: Path | None = None) -> float | None:
+    signal_path = path or DEFAULT_STOP_SIGNAL_PATH
+    if not signal_path.exists():
+        return None
+    lines = signal_path.read_text(encoding="utf-8").splitlines()
+    if len(lines) < 3:
+        return None
+    try:
+        return float(lines[2])
+    except ValueError:
+        return None
 
 
 def is_stop_requested(path: Path | None = None) -> bool:

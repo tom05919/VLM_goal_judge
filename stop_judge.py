@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "depth_implementation"))
 sys.path.insert(0, str(ROOT / "segmentation_implementation"))
 sys.path.insert(0, str(OMNIVLA_INFERENCE))
 
+from center_target import calculate_offset
 from run_grounded_sam2 import GroundedSAM2Segmenter, SegmentationResult
 from run_unidepth_depth import DepthEstimator
 from stop_signal import (
@@ -215,7 +216,12 @@ def run_live_loop(
                     f"[STOP] Target at {decision.distance_m:.3f} m "
                     f"(threshold {stop_distance_m} m) - halting."
                 )
-                trigger_stop(decision.distance_m, stop_signal_path)
+                center_offset = calculate_offset(perception.segmentation, image)
+                trigger_stop(
+                    decision.distance_m,
+                    stop_signal_path,
+                    center_offset=center_offset,
+                )
                 node.stop()
                 break
 

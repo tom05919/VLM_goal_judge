@@ -17,11 +17,15 @@ OMNIVLA_INFERENCE = OMNIVLA_ROOT / "inference"
 STOP_SIGNAL_PATH = ROOT / ".navigation_stop"
 CONDA_SH = Path("/root/miniforge3/etc/profile.d/conda.sh")
 ROS_SETUP = Path("/opt/ros/humble/setup.bash")
+sys.path.insert(0, str(OMNIVLA_INFERENCE))
 
+from center_target import center_target
 from stop_signal import (
     DEFAULT_MIN_INTERVAL_S,
     DEFAULT_STOP_DISTANCE_M,
     clear_stop,
+    is_stop_requested,
+    read_center_offset,
     trigger_stop,
 )
 
@@ -169,11 +173,35 @@ def main() -> None:
     omnivla_thread.start()
 
     while True:
+        if is_stop_requested(args.stop_signal_file):
+            break
         for proc in procs:
             if proc.poll() is not None:
                 print(f"[stack] Process exited with code {proc.returncode}")
                 shutdown()
-        time.sleep(2)
+        time.sleep(0.5)
+
+    print("[stack] Stop requested; waiting for navigation processes to exit...")
+    for proc in procs:
+        if proc.poll() is None:
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                proc.wait(timeout=5)
+
+    center_offset = read_center_offset(args.stop_signal_file)
+    if center_offset is None:
+        print("[stack] No target offset was saved; skipping centering.")
+        return
+
+    print(f"[stack] Centering target from offset {center_offset:.1f}px...")
+    center_target(
+        center_offset,
+        sim=args.sim,
+        cmd_vel_topic=args.cmd_vel_topic,
+    )
+    print("[stack] Target centering complete.")
 
 
 if __name__ == "__main__":
