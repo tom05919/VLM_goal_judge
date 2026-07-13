@@ -160,7 +160,6 @@ def main() -> None:
         OMNIVLA_INFERENCE / "run_omnivla_edge.py",
         omnivla_args,
         workdir=OMNIVLA_ROOT,
-        source_ros=True,
     )
     procs.append(omnivla_proc)
     omnivla_thread = threading.Thread(

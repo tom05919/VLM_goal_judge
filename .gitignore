@@ -1,6 +1,7 @@
 run_images/
 __pycache__/
 .navigation_stop
+.target_distance
 models/
 depth_implementation/outputs/
 depth_implementation/UniDepth/

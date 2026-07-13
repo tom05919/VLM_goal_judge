@@ -27,6 +27,7 @@ from stop_signal import (
     DEFAULT_STOP_SIGNAL_PATH,
     clear_stop,
     trigger_stop,
+    write_target_distance,
 )
 
 DEFAULT_IMAGE = ROOT / "current_img.jpg"
@@ -204,6 +205,8 @@ def run_live_loop(
                 continue
 
             decision, perception = judge.decide(image, stop_distance_m)
+            if decision.distance_m is not None:
+                write_target_distance(decision.distance_m, stop_signal_path.parent / ".target_distance")
             if save_viz and output_dir is not None:
                 save_perception_visualizations(perception, stem=f"live_{frame_idx}", output_dir=output_dir)
 
