@@ -7,11 +7,9 @@ from PIL import Image
 DT = 1 / 3
 HEADING_GAIN = 1.0
 RAW_ANGULAR_LIMIT = 1.0
-MAXV = 0.3
-MAXW = 0.3
+MAXW = 0.45
 FX = 272.5
 DEADBAND_PX = 5
-TURN_GAIN = 2.0
 PUBLISH_INTERVAL = 0.1
 
 # intake SAM2 image
@@ -31,7 +29,7 @@ def calculate_offset(segmentation_result, image: Image) -> float:
         target_x = np.mean(x_coor)
         offset_x = midpoint_x - target_x
 
-    return offset_x * 2.0
+    return offset_x
 
 def turn_angle(offset: float) -> float:
     if abs(offset) < DEADBAND_PX:
@@ -45,8 +43,7 @@ def turn_angle(offset: float) -> float:
         RAW_ANGULAR_LIMIT,
     )
 
-    linear_vel_value = 0.0
-    if abs(linear_vel_value) <= MAXV and abs(angular_vel_value) <= MAXW:
+    if abs(angular_vel_value) <= MAXW:
         angular_vel_value_limit = angular_vel_value
     else:
         angular_vel_value_limit = MAXW * np.sign(angular_vel_value)
@@ -64,7 +61,7 @@ def center_target(
         return
 
     theta = np.arctan2(offset, FX)
-    turn_duration = TURN_GAIN * abs(theta / angular_vel)
+    turn_duration = abs(theta / angular_vel)
 
     rclpy.init()
     node = IsaacSimPublisher(sim=sim, cmd_vel_topic=cmd_vel_topic)
