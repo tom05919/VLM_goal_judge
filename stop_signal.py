@@ -4,7 +4,7 @@ from pathlib import Path
 
 DEFAULT_STOP_SIGNAL_PATH = Path(__file__).resolve().parent / ".navigation_stop"
 DEFAULT_TARGET_DISTANCE_PATH = DEFAULT_STOP_SIGNAL_PATH.parent / ".target_distance"
-DEFAULT_STOP_DISTANCE_M = 1.3
+DEFAULT_STOP_DISTANCE_M = 1.0
 DEFAULT_MIN_INTERVAL_S = 1.0
 
 
