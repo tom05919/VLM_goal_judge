@@ -1,3 +1,15 @@
+#!/usr/bin/env python3
+"""Rotate the robot to center a detected target offset."""
+
+import argparse
+import sys
+from pathlib import Path
+
+OMNIVLA_INFERENCE = (
+    Path(__file__).resolve().parent.parent / "omni-VLA" / "OmniVLA" / "inference"
+)
+sys.path.insert(0, str(OMNIVLA_INFERENCE))
+
 import rclpy
 from isaacsim_controller import IsaacSimPublisher, clip_angle
 import numpy as np
@@ -75,3 +87,20 @@ def center_target(
         node.stop()
         node.destroy_node()
         rclpy.shutdown()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Center a target from its pixel offset")
+    parser.add_argument("offset", type=float, help="Horizontal target offset in pixels")
+    parser.add_argument("--sim", action="store_true", help="Use Isaac Sim ROS topics")
+    parser.add_argument("--cmd-vel-topic", default=None)
+    args = parser.parse_args()
+    center_target(
+        args.offset,
+        sim=args.sim,
+        cmd_vel_topic=args.cmd_vel_topic,
+    )
+
+
+if __name__ == "__main__":
+    main()

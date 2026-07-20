@@ -109,7 +109,6 @@ def main() -> None:
                 raise RuntimeError(f"OmniVLA server error: {reply['error']}")
 
             linear = float(reply["linear"])
-            # Server yaw sign is opposite the Go2/cmd_vel convention.
             angular = float(reply["angular"])
             if not math.isfinite(linear) or not math.isfinite(angular):
                 raise ValueError("Server returned a non-finite velocity")

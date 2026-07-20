@@ -1,0 +1,24 @@
+name: sim
+channels:
+  - conda-forge
+  - robostack-humble
+dependencies:
+  - python=3.11.15
+  - pip=26.1.1
+  - ros-humble-rclpy=3.3.16
+  - ros-humble-ros2cli=0.18.12
+  - ros-humble-foxglove-bridge=0.8.5
+  - ros-humble-slam-toolbox=2.6.10
+  - ros-humble-navigation2=1.1.18
+  - ros-humble-nav2-bringup=1.1.18
+  - ros-humble-pointcloud-to-laserscan=2.0.1
+  - ros-humble-joy=3.3.0
+  - ros-humble-teleop-twist-joy=2.4.7
+  - ros-humble-twist-mux=4.3.0
+  - ros-humble-sensor-msgs=4.9.0
+  - ros-humble-geometry-msgs=4.9.0
+  - ros-humble-std-msgs=4.9.0
+  - compilers
+  - cmake
+  - pkg-config
+  - colcon-common-extensions

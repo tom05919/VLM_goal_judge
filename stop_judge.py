@@ -208,6 +208,7 @@ def run_live_loop(
 
     rclpy.init()
     node = IsaacSimPublisher(sim=sim, cmd_vel_topic=cmd_vel_topic)
+    print("LIVE_JUDGE_READY", flush=True)
     frame_idx = 0
     try:
         while True:
