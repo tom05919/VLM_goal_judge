@@ -1,15 +1,35 @@
+#!/usr/bin/env python3
+"""Rotate the robot to center a detected target offset."""
+
+import argparse
+import sys
+from pathlib import Path
+
+OMNIVLA_INFERENCE = (
+    Path(__file__).resolve().parent.parent / "omni-VLA" / "inference"
+)
+sys.path.insert(0, str(OMNIVLA_INFERENCE))
+
 import rclpy
-from isaacsim_controller import IsaacSimPublisher
+from isaacsim_controller import IsaacSimPublisher, clip_angle
 import numpy as np
+import time
 from PIL import Image
-from run_grounded_sam2 import SegmentationResult
+
+DT = 1 / 3
+HEADING_GAIN = 1.0
+RAW_ANGULAR_LIMIT = 1.0
+MAXW = 0.5
+FX = 272.5
+DEADBAND_PX = 5
+PUBLISH_INTERVAL = 0.1
 
 # intake SAM2 image
 # figure out midpoint of the target
 # calulate off set from the midpoint of the image and calculate the angle to center the target
 # publish the angle to the robot
 
-def calculate_offset(segmentation_result: SegmentationResult, image: Image) -> float:
+def calculate_offset(segmentation_result, image: Image) -> float:
     midpoint_x = image.width / 2
 
     if not segmentation_result.scores:
@@ -23,42 +43,64 @@ def calculate_offset(segmentation_result: SegmentationResult, image: Image) -> f
 
     return offset_x
 
-def pd_control(offset: float) -> float:
-    EPS = 1e-8
-    DT = 1 / 3
-    if np.abs(offset) < EPS:
-        angular_vel_value = 1.0 * np.sign(dy) * np.pi / (2 * DT)
+def turn_angle(offset: float) -> float:
+    if abs(offset) < DEADBAND_PX:
+        return 0.0
+
+    theta = np.arctan2(offset, FX)
+    angular_vel_value = HEADING_GAIN * clip_angle(theta) / DT
+    angular_vel_value = np.clip(
+        angular_vel_value,
+        -RAW_ANGULAR_LIMIT,
+        RAW_ANGULAR_LIMIT,
+    )
+
+    if abs(angular_vel_value) <= MAXW:
+        angular_vel_value_limit = angular_vel_value
     else:
-        angular_vel_value = np.arctan(dy / dx) / DT
+        angular_vel_value_limit = MAXW * np.sign(angular_vel_value)
 
-    linear_vel_value = np.clip(linear_vel_value, 0, 0.5)
-    angular_vel_value = np.clip(angular_vel_value, -1.0, 1.0)
+    return float(angular_vel_value_limit)
 
-    # Velocity limitation
-    maxv, maxw = 0.3, 0.3
-    if np.abs(linear_vel_value) <= maxv:
-        if np.abs(angular_vel_value) <= maxw:
-            linear_vel_value_limit = linear_vel_value
-            angular_vel_value_limit = angular_vel_value
-        else:
-            rd = linear_vel_value / angular_vel_value
-            linear_vel_value_limit = maxw * np.sign(linear_vel_value) * np.abs(rd)
-            angular_vel_value_limit = maxw * np.sign(angular_vel_value)
-    else:
-        if np.abs(angular_vel_value) <= 0.001:
-            linear_vel_value_limit = maxv * np.sign(linear_vel_value)
-            angular_vel_value_limit = 0.0
-        else:
-            rd = linear_vel_value / angular_vel_value
-            if np.abs(rd) >= maxv / maxw:
-                linear_vel_value_limit = maxv * np.sign(linear_vel_value)
-                angular_vel_value_limit = maxv * np.sign(angular_vel_value) / np.abs(rd)
-            else:
-                linear_vel_value_limit = maxw * np.sign(linear_vel_value) * np.abs(rd)
-                angular_vel_value_limit = maxw * np.sign(angular_vel_value)
 
-    # Publish a single velocity command derived from the chosen future
-    # waypoint via the PD controller above, then re-plan on the next tick.
-    if self._estop.is_set() or self._check_external_stop():
-        return self.linear, self.angular
-    self.node.publish_velocity(linear_vel_value_limit, angular_vel_value_limit)
+def center_target(
+    offset: float,
+    sim: bool = False,
+    cmd_vel_topic: str | None = None,
+) -> None:
+    angular_vel = turn_angle(offset)
+    if angular_vel == 0.0:
+        return
+
+    theta = np.arctan2(offset, FX)
+    turn_duration = abs(theta / angular_vel)
+
+    rclpy.init()
+    node = IsaacSimPublisher(sim=sim, cmd_vel_topic=cmd_vel_topic)
+    try:
+        time.sleep(1.0)  # Allow the new ROS publisher to discover its subscriber.
+        turn_end = time.monotonic() + turn_duration
+        while time.monotonic() < turn_end:
+            node.publish_velocity(0.0, angular_vel)
+            time.sleep(PUBLISH_INTERVAL)
+    finally:
+        node.stop()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Center a target from its pixel offset")
+    parser.add_argument("offset", type=float, help="Horizontal target offset in pixels")
+    parser.add_argument("--sim", action="store_true", help="Use Isaac Sim ROS topics")
+    parser.add_argument("--cmd-vel-topic", default=None)
+    args = parser.parse_args()
+    center_target(
+        args.offset,
+        sim=args.sim,
+        cmd_vel_topic=args.cmd_vel_topic,
+    )
+
+
+if __name__ == "__main__":
+    main()

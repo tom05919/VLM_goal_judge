@@ -1,0 +1,15 @@
+# Full OmniVLA runtime. Remaining project dependencies come from the editable
+# OmniVLA install; these pins protect the known torch/TensorFlow compatibility.
+numpy==1.26.4
+scipy==1.11.4
+torch==2.2.0
+torchvision==0.17.0
+torchaudio==2.2.0
+pyzmq==26.2.0
+utm==0.8.1
+packaging==24.2
+ninja==1.11.1.1
+pillow==11.1.0
+protobuf==4.25.3
+tensorflow-metadata==1.15.0
+wandb==0.27.1

@@ -1,0 +1,14 @@
+# OmniVLA-edge runtime only. Do not install the full OmniVLA project metadata
+# into this env: its pyproject pins torch 2.2 and would downgrade this stack.
+setuptools==79.0.1
+packaging==24.2
+numpy==1.26.4
+torch==2.7.0
+torchvision==0.22.0
+torchaudio==2.7.0
+utm==0.8.1
+pillow==11.1.0
+matplotlib==3.10.3
+PyYAML==6.0.2
+openai-clip==1.0.1
+efficientnet-pytorch==0.7.1

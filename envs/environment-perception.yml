@@ -1,0 +1,10 @@
+name: perception
+channels:
+  - conda-forge
+  - robostack-humble
+dependencies:
+  - python=3.11.15
+  - pip=26.1.1
+  - ros-humble-rclpy=3.3.16
+  - ros-humble-sensor-msgs=4.9.0
+  - ros-humble-geometry-msgs=4.9.0
