@@ -26,7 +26,6 @@ from run_robot_stack import (
     DEFAULT_VLA_PROMPT,
     STOP_SIGNAL_PATH,
     StackConfig,
-    StackProcessError,
     launch_stack,
     resolve_conda_sh,
 )
@@ -131,13 +130,6 @@ def _config_from_run_args(args: argparse.Namespace) -> StackConfig:
     )
 
 
-def _launch(config: StackConfig) -> None:
-    try:
-        launch_stack(config)
-    except StackProcessError as exc:
-        raise SystemExit(f"stack failed: {exc}") from exc
-
-
 def cmd_serve(args: argparse.Namespace) -> None:
     """Run full OmniVLA as a ZeroMQ server (GPU host). Activate omnivla env."""
     conda_sh = resolve_conda_sh()
@@ -167,19 +159,6 @@ def cmd_serve(args: argparse.Namespace) -> None:
         flush=True,
     )
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-    for key in (
-        "PYTHONPATH",
-        "AMENT_PREFIX_PATH",
-        "COLCON_PREFIX_PATH",
-        "CMAKE_PREFIX_PATH",
-        "LD_LIBRARY_PATH",
-        "ROS_DISTRO",
-        "ROS_PACKAGE_PATH",
-        "ROS_PYTHON_VERSION",
-        "ROS_ROOT",
-        "ROS_VERSION",
-    ):
-        env.pop(key, None)
     raise SystemExit(subprocess.call(["bash", "-lc", cmd], env=env))
 
 
@@ -205,7 +184,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # No subcommand and no flags → interactive wizard.
     if not argv:
-        _launch(run_wizard())
+        launch_stack(run_wizard())
         return
 
     # Allow `go2_nav.py --sam ...` as alias for `run` without requiring the subcommand.
@@ -217,7 +196,7 @@ def main(argv: list[str] | None = None) -> None:
         cmd_serve(args)
         return
     if args.command == "run":
-        _launch(_config_from_run_args(args))
+        launch_stack(_config_from_run_args(args))
         return
     parser.print_help()
     raise SystemExit(2)

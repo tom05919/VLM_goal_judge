@@ -15,10 +15,10 @@ git clone https://github.com/tom05919/Omni-VLA_Go2.git omni-VLA/OmniVLA
 # Baseline before the current repair work:
 git -C omni-VLA/OmniVLA checkout 990bc6ffb3d16295bb79b0e77c80879b6064a2d0
 
-mkdir -p real_robot_SDKs/unofficial_sdk_unitree_go_2/src
+mkdir -p unofficial_sdk_unitree_go_2/src
 git clone https://github.com/abizovnuralem/go2_ros2_sdk.git \
-  real_robot_SDKs/unofficial_sdk_unitree_go_2/src/src
-git -C real_robot_SDKs/unofficial_sdk_unitree_go_2/src/src \
+  unofficial_sdk_unitree_go_2/src/src
+git -C unofficial_sdk_unitree_go_2/src/src \
   checkout 4e186b5f89bfec1f32c85676cbe22d4958e4f0fa
 
 git clone https://github.com/lpiccinelli-eth/UniDepth.git \

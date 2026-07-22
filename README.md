@@ -9,7 +9,7 @@ Orchestrator for the Go2 stop-judge + OmniVLA navigation stack.
 
 | Script | Role |
 |--------|------|
-| `go2_nav.py` | Interactive CLI / `run` / `serve` (preferred entry) |
+| `go2_nav.py` | Interactive CLI / `run` / optional `serve` wrapper (preferred on robot) |
 | `run_robot_stack.py` | Library + slim flags; launches stop judge + nav |
 | `stop_judge.py` | Scan + live distance stop (SAM2 + UniDepth) |
 | `scan_surround.py` | 360° scan helper used by stop judge |

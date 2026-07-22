@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import os
 import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -38,10 +37,6 @@ DEFAULT_VLA_PROMPT = "go to the human with white shirt"
 DEFAULT_ENDPOINT = "tcp://localhost:5555"
 
 
-class StackProcessError(RuntimeError):
-    """A stack child failed or did not become ready safely."""
-
-
 def resolve_conda_sh() -> Path:
     """Locate conda.sh without hardcoding /root/miniforge3."""
     override = os.environ.get("GO2_CONDA_BASE")
@@ -62,17 +57,6 @@ def resolve_conda_sh() -> Path:
     mamba_root = os.environ.get("MAMBA_ROOT_PREFIX")
     if mamba_root:
         candidate = Path(mamba_root) / "etc" / "profile.d" / "conda.sh"
-        if candidate.is_file():
-            return candidate
-
-    conda_command = shutil.which("conda")
-    if conda_command:
-        candidate = (
-            Path(conda_command).resolve().parent.parent
-            / "etc"
-            / "profile.d"
-            / "conda.sh"
-        )
         if candidate.is_file():
             return candidate
 
@@ -129,13 +113,12 @@ def _stream_output(
     proc: subprocess.Popen,
     prefix: str,
     ready_event: threading.Event | None = None,
-    ready_marker: str = "LIVE_JUDGE_READY",
 ) -> None:
     if proc.stdout is None:
         return
     for line in proc.stdout:
         print(f"[{prefix}] {line}", end="")
-        if ready_event is not None and ready_marker in line:
+        if ready_event is not None and "SCAN_DONE" in line:
             ready_event.set()
 
 
@@ -155,78 +138,14 @@ def _conda_run(
         f"cd {shlex.quote(str(workdir))} && "
         f"{' '.join(shlex.quote(part) for part in cmd_parts)}"
     )
-    child_env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-    # Do not leak packages or ROS overlays from the shell that launched the
-    # parent CLI. The activated RoboStack env supplies all of these itself.
-    for key in (
-        "PYTHONPATH",
-        "AMENT_PREFIX_PATH",
-        "COLCON_PREFIX_PATH",
-        "CMAKE_PREFIX_PATH",
-        "LD_LIBRARY_PATH",
-        "ROS_DISTRO",
-        "ROS_PACKAGE_PATH",
-        "ROS_PYTHON_VERSION",
-        "ROS_ROOT",
-        "ROS_VERSION",
-    ):
-        child_env.pop(key, None)
     return subprocess.Popen(
         ["bash", "-lc", cmd],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        env=child_env,
-        start_new_session=True,
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
     )
-
-
-def _request_stop(path: Path) -> None:
-    """Latch a stop without overwriting a judge-provided distance/offset."""
-    if not is_stop_requested(path):
-        trigger_stop(0.0, path)
-
-
-def _terminate_process(proc: subprocess.Popen, timeout: float = 5.0) -> None:
-    running = proc.poll() is None
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except (ProcessLookupError, PermissionError):
-        if running:
-            proc.terminate()
-    if not running:
-        return
-    try:
-        proc.wait(timeout=timeout)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        proc.kill()
-    proc.wait(timeout=timeout)
-
-
-def _wait_until_ready(
-    proc: subprocess.Popen,
-    ready_event: threading.Event,
-    label: str,
-    timeout: float,
-) -> None:
-    """Wait for readiness while also observing early child failure."""
-    deadline = time.monotonic() + timeout
-    while not ready_event.wait(timeout=0.2):
-        returncode = proc.poll()
-        if returncode is not None:
-            raise StackProcessError(
-                f"{label} exited with code {returncode} before becoming ready"
-            )
-        if time.monotonic() >= deadline:
-            raise StackProcessError(
-                f"{label} did not become ready within {timeout:.0f} seconds"
-            )
 
 
 def _navigation_spec(config: StackConfig, shared_nav_args: list[str]) -> tuple[str, Path, list[str], Path, str]:
@@ -311,139 +230,101 @@ def launch_stack(config: StackConfig) -> None:
         stop_judge_args.extend(["--cmd-vel-topic", config.cmd_vel_topic])
 
     procs: list[subprocess.Popen] = []
-    previous_handlers: dict[int, signal.Handlers] = {}
 
     def shutdown(signum=None, frame=None):
         print("\n[stack] Shutting down...")
-        _request_stop(config.stop_signal_file)
+        trigger_stop(0.0, config.stop_signal_file)
         for proc in procs:
-            _terminate_process(proc)
-        raise SystemExit(128 + int(signum or signal.SIGTERM))
-
-    if threading.current_thread() is threading.main_thread():
-        for signum in (signal.SIGINT, signal.SIGTERM):
-            previous_handlers[signum] = signal.getsignal(signum)
-            signal.signal(signum, shutdown)
-
-    try:
-        stop_judge_ready = threading.Event()
-
-        print("[stack] Starting stop judge (load models + 360° scan)...")
-        stop_proc = _conda_run(
-            "perception",
-            ROOT / "stop_judge.py",
-            stop_judge_args,
-            conda_sh=conda_sh,
-            workdir=ROOT,
-        )
-        procs.append(stop_proc)
-        stop_thread = threading.Thread(
-            target=_stream_output,
-            args=(stop_proc, "stop_judge", stop_judge_ready),
-            daemon=True,
-        )
-        stop_thread.start()
-
-        print("[stack] Waiting for scan + live stop judge readiness...")
-        _wait_until_ready(
-            stop_proc,
-            stop_judge_ready,
-            "stop_judge",
-            timeout=900,
-        )
-        print("[stack] Stop judge is live; starting navigation.")
-
-        nav_env, nav_script, nav_args, nav_workdir, nav_label = _navigation_spec(
-            config, shared_nav_args
-        )
-        print(f"[stack] Starting {nav_label} navigation...")
-        omnivla_proc = _conda_run(
-            nav_env,
-            nav_script,
-            nav_args,
-            conda_sh=conda_sh,
-            workdir=nav_workdir,
-        )
-        procs.append(omnivla_proc)
-        omnivla_thread = threading.Thread(
-            target=_stream_output,
-            args=(omnivla_proc, nav_label),
-            daemon=True,
-        )
-        omnivla_thread.start()
-
-        while not is_stop_requested(config.stop_signal_file):
-            for proc, label in (
-                (stop_proc, "stop_judge"),
-                (omnivla_proc, nav_label),
-            ):
-                returncode = proc.poll()
-                if returncode is not None:
-                    raise StackProcessError(
-                        f"{label} exited unexpectedly with code {returncode}"
-                    )
-            time.sleep(0.5)
-
-        print("[stack] Stop requested; waiting for navigation processes to exit...")
-        for proc, label in (
-            (stop_proc, "stop_judge"),
-            (omnivla_proc, nav_label),
-        ):
             if proc.poll() is None:
-                try:
-                    proc.wait(timeout=30)
-                except subprocess.TimeoutExpired as exc:
-                    _terminate_process(proc)
-                    raise StackProcessError(
-                        f"{label} did not exit within 30 seconds of STOP"
-                    ) from exc
-            if proc.returncode != 0:
-                raise StackProcessError(
-                    f"{label} exited with code {proc.returncode} after STOP"
-                )
-
-        center_offset = read_center_offset(config.stop_signal_file)
-        if center_offset is None:
-            print("[stack] No target offset was saved; skipping centering.")
-            return
-
-        center_args = [str(center_offset)]
-        if config.sim:
-            center_args.append("--sim")
-        if config.cmd_vel_topic:
-            center_args.extend(["--cmd-vel-topic", config.cmd_vel_topic])
-        print(f"[stack] Centering target from offset {center_offset:.1f}px...")
-        center_proc = _conda_run(
-            "sim",
-            ROOT / "center_target.py",
-            center_args,
-            conda_sh=conda_sh,
-            workdir=ROOT,
-        )
-        procs.append(center_proc)
-        center_thread = threading.Thread(
-            target=_stream_output,
-            args=(center_proc, "center_target"),
-            daemon=True,
-        )
-        center_thread.start()
-        try:
-            center_returncode = center_proc.wait(timeout=30)
-        except subprocess.TimeoutExpired as exc:
-            raise StackProcessError("center_target timed out") from exc
-        if center_returncode != 0:
-            raise StackProcessError(
-                f"center_target exited with code {center_returncode}"
-            )
-        print("[stack] Target centering complete.")
-    except BaseException:
-        _request_stop(config.stop_signal_file)
-        raise
-    finally:
+                proc.terminate()
         for proc in procs:
-            _terminate_process(proc)
-        for signum, previous in previous_handlers.items():
-            signal.signal(signum, previous)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    stop_judge_ready = threading.Event()
+
+    print("[stack] Starting stop judge (load models + 360° scan)...")
+    stop_proc = _conda_run(
+        "perception",
+        ROOT / "stop_judge.py",
+        stop_judge_args,
+        conda_sh=conda_sh,
+        workdir=ROOT,
+    )
+    procs.append(stop_proc)
+    stop_thread = threading.Thread(
+        target=_stream_output,
+        args=(stop_proc, "stop_judge", stop_judge_ready),
+        daemon=True,
+    )
+    stop_thread.start()
+
+    print("[stack] Waiting for models + scan to finish...")
+    if not stop_judge_ready.wait(timeout=900):
+        print("[stack] WARNING: scan not done after 15 min; starting OmniVLA anyway")
+    else:
+        print("[stack] Scan complete; starting navigation.")
+
+    nav_env, nav_script, nav_args, nav_workdir, nav_label = _navigation_spec(
+        config, shared_nav_args
+    )
+    print(f"[stack] Starting {nav_label} navigation...")
+    omnivla_proc = _conda_run(
+        nav_env,
+        nav_script,
+        nav_args,
+        conda_sh=conda_sh,
+        workdir=nav_workdir,
+    )
+    procs.append(omnivla_proc)
+    omnivla_thread = threading.Thread(
+        target=_stream_output,
+        args=(omnivla_proc, nav_label),
+        daemon=True,
+    )
+    omnivla_thread.start()
+
+    while True:
+        if is_stop_requested(config.stop_signal_file):
+            break
+        for proc in procs:
+            if proc.poll() is not None:
+                print(f"[stack] Process exited with code {proc.returncode}")
+                shutdown()
+        time.sleep(0.5)
+
+    print("[stack] Stop requested; waiting for navigation processes to exit...")
+    for proc in procs:
+        if proc.poll() is None:
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                proc.wait(timeout=5)
+
+    center_offset = read_center_offset(config.stop_signal_file)
+    if center_offset is None:
+        print("[stack] No target offset was saved; skipping centering.")
+        return
+
+    print(f"[stack] Centering target from offset {center_offset:.1f}px...")
+    # Lazy import: center_target pulls rclpy; keep go2_nav --help ROS-free.
+    if str(OMNIVLA_INFERENCE) not in sys.path:
+        sys.path.insert(0, str(OMNIVLA_INFERENCE))
+    from center_target import center_target
+
+    center_target(
+        center_offset,
+        sim=config.sim,
+        cmd_vel_topic=config.cmd_vel_topic,
+    )
+    print("[stack] Target centering complete.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -452,6 +333,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--sam",
+        "--text-prompt",
         dest="sam_prompt",
         default=DEFAULT_SAM_PROMPT,
         help="SAM2 prompt for scan_surround + stop_judge",
@@ -497,10 +379,7 @@ def main(argv: list[str] | None = None) -> None:
         stop_signal_file=args.stop_signal_file,
         cmd_vel_topic=args.cmd_vel_topic,
     )
-    try:
-        launch_stack(config)
-    except StackProcessError as exc:
-        parser.exit(1, f"stack failed: {exc}\n")
+    launch_stack(config)
 
 
 if __name__ == "__main__":
