@@ -10,15 +10,14 @@ Run these commands from the directory that will contain the three project trees:
 ```bash
 git clone https://github.com/tom05919/VLM_goal_judge.git goal_stop_judge
 
-mkdir -p omni-VLA
-git clone https://github.com/tom05919/Omni-VLA_Go2.git omni-VLA/OmniVLA
+git clone https://github.com/tom05919/Omni-VLA_Go2.git omni-VLA
 # Baseline before the current repair work:
-git -C omni-VLA/OmniVLA checkout 990bc6ffb3d16295bb79b0e77c80879b6064a2d0
+git -C omni-VLA checkout 990bc6ffb3d16295bb79b0e77c80879b6064a2d0
 
-mkdir -p unofficial_sdk_unitree_go_2/src
+mkdir -p unofficial_sdk_unitree_go_2
 git clone https://github.com/abizovnuralem/go2_ros2_sdk.git \
-  unofficial_sdk_unitree_go_2/src/src
-git -C unofficial_sdk_unitree_go_2/src/src \
+  unofficial_sdk_unitree_go_2/src
+git -C unofficial_sdk_unitree_go_2/src \
   checkout 4e186b5f89bfec1f32c85676cbe22d4958e4f0fa
 
 git clone https://github.com/lpiccinelli-eth/UniDepth.git \
@@ -39,18 +38,18 @@ committed, replace it with that commit before publishing the setup guide.
 
 ```bash
 git clone https://huggingface.co/NHirose/omnivla-edge \
-  omni-VLA/OmniVLA/omnivla-edge
-git -C omni-VLA/OmniVLA/omnivla-edge \
+  omni-VLA/omnivla-edge
+git -C omni-VLA/omnivla-edge \
   checkout b1361b7e24f101edea795a98b00a826b61a97394
 
 git clone https://huggingface.co/NHirose/omnivla-original \
-  omni-VLA/OmniVLA/omnivla-original
-git -C omni-VLA/OmniVLA/omnivla-original \
+  omni-VLA/omnivla-original
+git -C omni-VLA/omnivla-original \
   checkout e36a84d4923c041149d441f93f3bdb7092bb5f07
 
 git clone https://huggingface.co/NHirose/omnivla-finetuned-cast \
-  omni-VLA/OmniVLA/omnivla-finetuned-cast
-git -C omni-VLA/OmniVLA/omnivla-finetuned-cast \
+  omni-VLA/omnivla-finetuned-cast
+git -C omni-VLA/omnivla-finetuned-cast \
   checkout 7d3744a72cd89218be4d223783f0742819b6c6db
 ```
 

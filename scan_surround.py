@@ -10,7 +10,7 @@ import rclpy
 from PIL import Image as PILImage
 
 ROOT = Path(__file__).resolve().parent
-OMNIVLA_INFERENCE = ROOT.parent / "omni-VLA" / "OmniVLA" / "inference"
+OMNIVLA_INFERENCE = ROOT.parent / "omni-VLA" / "inference"
 sys.path.insert(0, str(OMNIVLA_INFERENCE))
 sys.path.insert(0, str(ROOT / "segmentation_implementation"))
 

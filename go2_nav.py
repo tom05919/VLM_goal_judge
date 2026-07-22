@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-OMNIVLA_ROOT = ROOT.parent / "omni-VLA" / "OmniVLA"
+OMNIVLA_ROOT = ROOT.parent / "omni-VLA"
 OMNIVLA_INFERENCE = OMNIVLA_ROOT / "inference"
 
 from run_robot_stack import (

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-OMNIVLA_ROOT = ROOT.parent / "omni-VLA" / "OmniVLA"
+OMNIVLA_ROOT = ROOT.parent / "omni-VLA"
 OMNIVLA_INFERENCE = OMNIVLA_ROOT / "inference"
 STOP_SIGNAL_PATH = ROOT / ".navigation_stop"
 

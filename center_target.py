@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 OMNIVLA_INFERENCE = (
-    Path(__file__).resolve().parent.parent / "omni-VLA" / "OmniVLA" / "inference"
+    Path(__file__).resolve().parent.parent / "omni-VLA" / "inference"
 )
 sys.path.insert(0, str(OMNIVLA_INFERENCE))
 

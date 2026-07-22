@@ -16,7 +16,7 @@ from PIL import Image
 #     sys.path.insert(0, _qwen_site_str)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-# sys.path.insert(0, str(SCRIPT_DIR.parent / "omni-VLA/OmniVLA/inference"))
+# sys.path.insert(0, str(SCRIPT_DIR.parent / "omni-VLA/inference"))
 
 # import rclpy
 import torch
